@@ -55,7 +55,10 @@ final class GuildManager: ObservableObject {
     }
     
     func completeExpedition(expedition: ActiveExpedition, for user: User, context: ModelContext) {
-        guard let expeditionData = expedition.expedition else { return }
+        guard let expeditionData = ItemDatabase.shared.getExpedition(id: expedition.expeditionID) else { 
+            print("Failed to find expedition data for ID: \(expedition.expeditionID)")
+            return 
+        }
         
         // Give rewards
         user.totalXP += expeditionData.xpReward
@@ -85,10 +88,44 @@ final class GuildManager: ObservableObject {
     func checkCompletedExpeditions(for user: User, context: ModelContext) {
         guard let expeditions = user.activeExpeditions, !expeditions.isEmpty else { return }
         
-        let completedExpeditions = expeditions.filter { $0.endTime <= .now }
+        let completedExpeditions = expeditions.filter { expedition in
+            guard let expeditionData = ItemDatabase.shared.getExpedition(id: expedition.expeditionID) else { return false }
+            let endTime = expedition.startTime.addingTimeInterval(expeditionData.duration)
+            return endTime <= Date()
+        }
         
         for expedition in completedExpeditions {
             completeExpedition(expedition: expedition, for: user, context: context)
+        }
+    }
+    
+    func cleanupInvalidExpeditions(for user: User, context: ModelContext) {
+        guard let expeditions = user.activeExpeditions, !expeditions.isEmpty else { return }
+        
+        let invalidExpeditions = expeditions.filter { expedition in
+            ItemDatabase.shared.getExpedition(id: expedition.expeditionID) == nil
+        }
+        
+        for expedition in invalidExpeditions {
+            // Free up members that were on this invalid expedition
+            expedition.memberIDs.forEach { id in
+                user.guildMembers?.first(where: { $0.id == id })?.isOnExpedition = false
+            }
+            
+            // Remove expedition from user's list
+            user.activeExpeditions?.removeAll { $0.id == expedition.id }
+            
+            // Delete from context
+            context.delete(expedition)
+        }
+        
+        if !invalidExpeditions.isEmpty {
+            do {
+                try context.save()
+                print("Cleaned up \(invalidExpeditions.count) invalid expeditions")
+            } catch {
+                print("Failed to cleanup invalid expeditions: \(error)")
+            }
         }
     }
     
