@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Combine
 
 // MARK: - Main Habit Garden View
 // FIXED: Added 'public' so this view can be accessed from SanctuaryView
@@ -247,29 +248,89 @@ struct RewardDescriptionView: View {
 struct GuildHallView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var user: User
-    
+    @State private var timer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
+    @State private var showMemberList: Bool = false
+
+    private var guild: Guild? { user.guild }
+    private var members: [GuildMember] { (user.guildMembers ?? []).filter { $0.role.isGathererRole } }
+    private var activeExpeditions: [ActiveExpedition] { user.activeExpeditions ?? [] }
+    private var activeBounties: [GuildBounty] { (user.guildBounties ?? []).filter { $0.isActive } }
+
+    private var plantedCounts: (seeds: Int, crops: Int, trees: Int) {
+        (user.plantedHabitSeeds?.count ?? 0, user.plantedCrops?.count ?? 0, user.plantedTrees?.count ?? 0)
+    }
+
+    private var readyToHarvestCount: Int {
+        let now = Date()
+        let seedReady = (user.plantedHabitSeeds ?? []).filter { p in if let s = p.seed, let t = s.growTime { return p.plantedAt.addingTimeInterval(t) <= now } else { return false } }.count
+        let cropReady = (user.plantedCrops ?? []).filter { p in if let s = p.crop, let t = s.growTime { return p.plantedAt.addingTimeInterval(t) <= now } else { return false } }.count
+        let treeReady = (user.plantedTrees ?? []).filter { p in if let s = p.tree, let t = s.growTime { return p.plantedAt.addingTimeInterval(t) <= now } else { return false } }.count
+        return seedReady + cropReady + treeReady
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                // Header
                 Text("Guild Hall").font(.largeTitle).bold().padding(.horizontal)
-                
+                GuildHeaderView(guild: guild, user: user)
+
+                // Quick Stats Grid
+                dashboardGrid
+
+                // Automations
+                automationSection
+
+                // Gathering Expeditions Overview
+                gatheringExpeditionsSection
+
+                // Bounties Overview (non-combat focused shown here)
+                bountiesOverviewSection
+
+                // Members Summary (clean UI)
                 Section {
-                    Text("Your Guild Members").font(.title2).bold().padding(.horizontal)
-                    if (user.guildMembers ?? []).isEmpty {
-                        Text("No members yet. Hire someone from the Guild Master!")
+                    HStack {
+                        Text("Your Guild Gatherers").font(.title2).bold()
+                        Spacer()
+                        Button(action: { showMemberList.toggle() }) {
+                            HStack(spacing: 6) {
+                                Text(showMemberList ? "Hide List" : "Show List")
+                                Image(systemName: showMemberList ? "chevron.up" : "chevron.down")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.horizontal)
+
+                    if members.isEmpty {
+                        Text("No gatherers yet. Hire someone from the Guild Hall!")
                             .foregroundColor(.secondary)
                             .padding(.horizontal)
                     } else {
-                        ForEach(user.guildMembers ?? []) { member in
-                            GuildMemberRowView(member: member, user: user)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 16)], spacing: 16) {
+                            statCard(title: "Seeds Planted", value: "\(user.totalSeedsPlantedByGuild + user.totalCropsPlantedByGuild)", icon: "leaf.fill", tint: .green)
+                            statCard(title: "Trees Harvested", value: "\(user.totalTreesHarvestedByGuild)", icon: "tree.fill", tint: .green)
+                            statCard(title: "Crops Harvested", value: "\(user.totalCropsHarvestedByGuild)", icon: "tray.full.fill", tint: .orange)
+                            statCard(title: "Items Found", value: "\(user.totalItemsFoundByGuild)", icon: "bag.fill", tint: .brown)
+                        }
+                        .padding(.horizontal)
+
+                        if showMemberList {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(members) { member in
+                                    GuildMemberRowView(member: member, user: user)
+                                }
+                            }
+                            .transition(.opacity)
                         }
                     }
                 }
-                
+
+                // Hiring
                 Section {
-                    Text("Hire More").font(.title2).bold().padding(.horizontal)
+                    Text("Hire More Gatherers").font(.title2).bold().padding(.horizontal)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 16)], spacing: 16) {
-                        ForEach(GuildMember.Role.allCases, id: \.self) { role in
+                        ForEach(GuildMember.Role.allCases.filter { $0.isGathererRole }, id: \.self) { role in
                             HireableMemberCardView(role: role, user: user)
                         }
                     }.padding(.top, 8)
@@ -278,8 +339,182 @@ struct GuildHallView: View {
             .padding(.vertical)
         }
         .navigationTitle("Guild Hall")
+        .onAppear {
+            if user.guild == nil { GuildManager.shared.initializeGuild(for: user, context: modelContext) }
+        }
+        .onReceive(timer) { _ in
+            GuildManager.shared.checkCompletedExpeditions(for: user, context: modelContext)
+            GuildManager.shared.processAutomations(for: user, context: modelContext)
+        }
+    }
+
+    private var dashboardGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 200), spacing: 16)], spacing: 16) {
+            statCard(title: "Gatherers", value: "\(members.count)", icon: "person.3.fill", tint: .blue)
+            statCard(title: "Gathering Expeditions", value: "\(activeExpeditions.count)", icon: "map.fill", tint: .green)
+            statCard(title: "Bounties", value: "\(activeBounties.count)", icon: "scroll.fill", tint: .orange)
+            statCard(title: "Garden Ready", value: "\(readyToHarvestCount)", icon: "leaf.fill", tint: .green)
+            let eps = String(format: "%.2f/s", IdleGameManager.shared.totalEchoesPerSecond(for: user))
+            statCard(title: "Echoes", value: eps, icon: "flame.fill", tint: .purple)
+        }
+        .padding(.horizontal)
+    }
+
+    private var gatheringExpeditionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Gathering Expeditions").font(.title2).bold().padding(.horizontal)
+            AvailableExpeditionsGrid(user: user, mode: .gathering)
+        }
+    }
+
+    private var bountiesOverviewSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Bounties Overview").font(.title2).bold().padding(.horizontal)
+            if activeBounties.isEmpty {
+                Text("No active bounties.").font(.caption).foregroundColor(.secondary).padding(.horizontal)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(activeBounties) { bounty in
+                        GuildBountySummaryCard(bounty: bounty)
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+
+    private func statCard(title: String, value: String, icon: String, tint: Color) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: icon).foregroundColor(.white).padding(10).background(tint.opacity(0.6)).clipShape(RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading) {
+                Text(title).font(.caption).foregroundColor(.secondary)
+                Text(value).font(.headline)
+            }
+            Spacer()
+        }
+        .padding()
+        .background(Material.regular)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var automationSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Worker Automations").font(.title2).bold().padding(.horizontal)
+            VStack(spacing: 12) {
+                // Gardener Controls
+                automationRow(icon: "leaf.fill", color: .green) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Gardeners").font(.headline)
+                        Toggle("Auto-harvest ready plants", isOn: Binding(get: { user.guildAutomation.autoHarvestGarden }, set: { v in var s = user.guildAutomation; s.autoHarvestGarden = v; user.guildAutomation = s }))
+                        Toggle("Auto-plant Habit Seeds", isOn: Binding(get: { user.guildAutomation.autoPlantHabitSeeds }, set: { v in var s = user.guildAutomation; s.autoPlantHabitSeeds = v; user.guildAutomation = s }))
+                        HStack {
+                            Text("Maintain plots: \(user.guildAutomation.gardenerMaintainPlots)")
+                            Spacer()
+                            Stepper("", value: Binding(get: { user.guildAutomation.gardenerMaintainPlots }, set: { v in var s = user.guildAutomation; s.gardenerMaintainPlots = max(0, min(6, v)); user.guildAutomation = s }))
+                                .labelsHidden()
+                        }
+                        if user.guildAutomation.autoPlantHabitSeeds {
+                            seedPicker
+                        }
+                    }
+                }
+
+                // Forager Controls
+                automationRow(icon: "bag.fill", color: .brown) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Foragers").font(.headline)
+                        Toggle("Gather materials for the Altar", isOn: Binding(get: { user.guildAutomation.foragerGatherForAltar }, set: { v in var s = user.guildAutomation; s.foragerGatherForAltar = v; user.guildAutomation = s }))
+                        Text("Items are periodically added to your inventory based on Forager levels.").font(.caption).foregroundColor(.secondary)
+                    }
+                }
+
+                // Seer Controls
+                automationRow(icon: "eye.fill", color: .purple) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Seers").font(.headline)
+                        Toggle("Attune the Altar (boost Echoes)", isOn: Binding(get: { user.guildAutomation.seerAttuneAltar }, set: { v in var s = user.guildAutomation; s.seerAttuneAltar = v; user.guildAutomation = s }))
+                        Text("When enabled, Seers increase your Echo generation.").font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    private var seedPicker: some View {
+        let seedOptions: [Item] = (user.inventory ?? [])
+            .compactMap { ItemDatabase.shared.getItem(id: $0.itemID) }
+            .filter { $0.plantableType == .habitSeed }
+        return Group {
+            if !seedOptions.isEmpty {
+                HStack {
+                    Text("Preferred seed:")
+                    Spacer()
+                    Menu(content: {
+                        Button("Any available") { var s = user.guildAutomation; s.preferredHabitSeedID = nil; user.guildAutomation = s }
+                        ForEach(seedOptions, id: \.id) { item in
+                            Button(item.name) { var s = user.guildAutomation; s.preferredHabitSeedID = item.id; user.guildAutomation = s }
+                        }
+                    }, label: {
+                        let selectedName = seedOptions.first(where: { $0.id == user.guildAutomation.preferredHabitSeedID })?.name ?? "Any"
+                        HStack { Text(selectedName); Image(systemName: "chevron.down").font(.caption) }
+                    })
+                }
+            }
+        }
+    }
+
+    private func automationRow<Content: View>(icon: String, color: Color, @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon).foregroundColor(.white).padding(10).background(color.opacity(0.7)).clipShape(RoundedRectangle(cornerRadius: 8))
+            content()
+            Spacer()
+        }
+        .padding()
+        .background(Material.regular)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
+
+// MARK: - Compact Bounty Card for Hall
+struct GuildBountySummaryCard: View {
+    let bounty: GuildBounty
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "scroll.fill").foregroundColor(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(bounty.title).font(.headline)
+                Text(bounty.bountyDescription).font(.caption).foregroundColor(.secondary).lineLimit(2)
+                ProgressView(value: Double(bounty.currentProgress), total: Double(bounty.requiredProgress))
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Label("\(bounty.guildXpReward) XP", systemImage: "star.fill").font(.caption).foregroundColor(.yellow)
+                Label("\(bounty.guildSealReward) Seals", systemImage: "seal.fill").font(.caption).foregroundColor(.orange)
+            }
+        }
+        .padding()
+        .background(Material.regular)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Expeditions Grid (reuses GM filtering)
+struct AvailableExpeditionsGrid: View {
+    let user: User
+    let mode: ExpeditionMode
+    var body: some View {
+        AvailableExpeditionsSection(availableMembers: (user.guildMembers ?? []).filter { member in
+            guard !member.isOnExpedition else { return false }
+            switch mode {
+            case .combat: return member.isCombatant
+            case .gathering: return member.role.isGathererRole
+            case .all: return true
+            }
+        }, mode: mode) { _ in }
+    }
+}
+
 
 struct GuildMemberRowView: View {
     @Environment(\.modelContext) private var modelContext

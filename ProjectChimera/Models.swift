@@ -44,6 +44,10 @@ enum QuestStatus: String, Codable {
     case available, active, completed
 }
 
+enum ExpeditionMode: String, Codable, CaseIterable {
+    case all, combat, gathering
+}
+
 enum LootReward: Codable, Hashable, Identifiable {
     var id: UUID { UUID() }
     case currency(Int)
@@ -199,6 +203,23 @@ final class User {
     var eggs: [HatchableEgg]? = []
     var activeHunts: [ActiveHunt]? = []
 
+    // --- NEW: Guild Automation ---
+    private var guildAutomationData: Data = Data()
+    var guildAutomation: GuildAutomationSettings {
+        get { (try? JSONDecoder().decode(GuildAutomationSettings.self, from: guildAutomationData)) ?? GuildAutomationSettings.defaultSettings }
+        set { guildAutomationData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+    var automationProgressForager: Double = 0.0
+    var lastAutomationRun: Date? = nil
+
+    // --- NEW: Aggregated Guild Work Stats ---
+    var totalSeedsPlantedByGuild: Int = 0
+    var totalCropsPlantedByGuild: Int = 0
+    var totalTreesPlantedByGuild: Int = 0
+    var totalSeedsHarvestedByGuild: Int = 0
+    var totalCropsHarvestedByGuild: Int = 0
+    var totalTreesHarvestedByGuild: Int = 0
+    var totalItemsFoundByGuild: Int = 0
 
     init(username: String) {
         self.id = UUID(); self.username = username; self.joinDate = .now; self.level = 1
@@ -210,14 +231,19 @@ final class User {
         self.plantedCrops = []; self.plantedTrees = []; self.guildMembers = []
         self.activeExpeditions = []; self.willpower = 0; self.statues = []; self.quests = []
         self.runes = 5; self.isDoubleXpNextTask = false; self.unlockedSpellIDs = []; self.activeBuffs = [:]
-        self.altarOfWhispers = nil
-        self.guild = nil
-        self.team = nil
-        self.guildSeals = 0
-        self.teamPoints = 0
-        self.activeHunts = []
-        self.huntKillTally = [:]
         self.unclaimedHuntGold = 0
+        // Initialize automation
+        self.guildAutomation = GuildAutomationSettings.defaultSettings
+        self.automationProgressForager = 0.0
+        self.lastAutomationRun = nil
+        // Initialize aggregated guild work stats
+        self.totalSeedsPlantedByGuild = 0
+        self.totalCropsPlantedByGuild = 0
+        self.totalTreesPlantedByGuild = 0
+        self.totalSeedsHarvestedByGuild = 0
+        self.totalCropsHarvestedByGuild = 0
+        self.totalTreesHarvestedByGuild = 0
+        self.totalItemsFoundByGuild = 0
     }
 
     /// Some legacy code still expects a `name` property on `User`.
@@ -226,6 +252,25 @@ final class User {
         get { username }
         set { username = newValue }
     }
+}
+
+// --- NEW: Automation Settings Model ---
+struct GuildAutomationSettings: Codable {
+    var autoHarvestGarden: Bool
+    var autoPlantHabitSeeds: Bool
+    var preferredHabitSeedID: String?
+    var gardenerMaintainPlots: Int
+    var foragerGatherForAltar: Bool
+    var seerAttuneAltar: Bool
+
+    static let defaultSettings = GuildAutomationSettings(
+        autoHarvestGarden: true,
+        autoPlantHabitSeeds: false,
+        preferredHabitSeedID: nil,
+        gardenerMaintainPlots: 6,
+        foragerGatherForAltar: false,
+        seerAttuneAltar: true
+    )
 }
 
 
