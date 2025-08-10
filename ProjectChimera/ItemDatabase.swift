@@ -50,6 +50,14 @@ final class ItemDatabase {
             requiredLevel: 1,
             runeCost: 1,
             effect: .doubleGold
+        ),
+        Spell(
+            id: "spell_echo_surge",
+            name: "Echo Surge",
+            description: "+50% Echoes for 10 minutes",
+            requiredLevel: 5,
+            runeCost: 2,
+            effect: .echoBoost(0.5)
         )
     ]
 
@@ -171,20 +179,38 @@ private extension ItemDatabase {
             Spell(id: "spell_surge_of_power", name: "Surge of Power", description: "Your next completed task grants double XP.", requiredLevel: 2, runeCost: 1, effect: .doubleXP),
             Spell(id: "spell_midas_touch", name: "Midas Touch", description: "For 10 minutes, all tasks grant double gold.", requiredLevel: 5, runeCost: 2, effect: .doubleGold),
 
-            // Attribute-boosting Spells
+            // Attribute-boosting Spells (Tier 1)
             Spell(id: "spell_mind_amplification", name: "Mind Amplification", description: "For 5 minutes, gain +50% XP for Mind tasks.", requiredLevel: 3, runeCost: 2, effect: .xpBoost(.intellect, 0.5)),
             Spell(id: "spell_disciplined_focus", name: "Disciplined Focus", description: "For 5 minutes, gain +50% XP for Discipline tasks.", requiredLevel: 3, runeCost: 2, effect: .xpBoost(.discipline, 0.5)),
             Spell(id: "spell_creative_spark", name: "Creative Spark", description: "For 5 minutes, gain +50% XP for Creativity tasks.", requiredLevel: 3, runeCost: 2, effect: .xpBoost(.creativity, 0.5)),
             Spell(id: "spell_resilient_spirit", name: "Resilient Spirit", description: "For 5 minutes, gain +50% XP for Resilience tasks.", requiredLevel: 3, runeCost: 2, effect: .xpBoost(.resilience, 0.5)),
             Spell(id: "spell_mindfulness_aura", name: "Mindfulness Aura", description: "For 5 minutes, gain +50% XP for Mindfulness tasks.", requiredLevel: 3, runeCost: 2, effect: .xpBoost(.mindfulness, 0.5)),
 
-            // Economy/Meta Spells
+            // Economy/Meta Spells (Tier 1)
             Spell(id: "spell_golden_harvest", name: "Golden Harvest", description: "For 10 minutes, all gold drops are increased by 25%.", requiredLevel: 7, runeCost: 3, effect: .goldBoost(0.25)),
             Spell(id: "spell_rune_surge", name: "Rune Surge", description: "For 10 minutes, all rune drops are increased by 10%.", requiredLevel: 10, runeCost: 4, effect: .runeBoost(0.10)),
             Spell(id: "spell_willpower_infusion", name: "Willpower Infusion", description: "For 5 minutes, passively generate 1 willpower every 10 seconds.", requiredLevel: 8, runeCost: 3, effect: .willpowerGeneration(1)),
             Spell(id: "spell_bargain_hunter", name: "Bargain Hunter", description: "For 15 minutes, all shop and upgrade costs are reduced by 5%.", requiredLevel: 12, runeCost: 5, effect: .reducedUpgradeCost(0.05)),
             Spell(id: "spell_guild_inspiration", name: "Guild Inspiration", description: "For 10 minutes, all Guild XP gains are increased by 20%.", requiredLevel: 15, runeCost: 6, effect: .guildXpBoost(0.20)),
-            Spell(id: "spell_verdant_growth", name: "Verdant Growth", description: "For 15 minutes, plant growth speed is increased by 50%.", requiredLevel: 9, runeCost: 3, effect: .plantGrowthSpeed(0.50))
+            Spell(id: "spell_verdant_growth", name: "Verdant Growth", description: "For 15 minutes, plant growth speed is increased by 50%.", requiredLevel: 9, runeCost: 3, effect: .plantGrowthSpeed(0.50)),
+
+            // Echoes (Tier 1)
+            Spell(id: "spell_echo_surge", name: "Echo Surge", description: "+50% Echoes for 10 minutes.", requiredLevel: 5, runeCost: 2, effect: .echoBoost(0.5)),
+
+            // Attribute-boosting Spells (Tier 2)
+            Spell(id: "spell_mind_apex", name: "Apex Intellect", description: "+100% XP from Mind tasks for 5 minutes.", requiredLevel: 20, runeCost: 6, effect: .xpBoost(.intellect, 1.0)),
+            Spell(id: "spell_disciplined_zenith", name: "Zenith of Discipline", description: "+100% XP from Discipline tasks for 5 minutes.", requiredLevel: 20, runeCost: 6, effect: .xpBoost(.discipline, 1.0)),
+            Spell(id: "spell_creativity_ascendant", name: "Creativity Ascendant", description: "+100% XP from Creativity tasks for 5 minutes.", requiredLevel: 20, runeCost: 6, effect: .xpBoost(.creativity, 1.0)),
+            Spell(id: "spell_resilience_unbroken", name: "Unbroken Resilience", description: "+100% XP from Resilience tasks for 5 minutes.", requiredLevel: 20, runeCost: 6, effect: .xpBoost(.resilience, 1.0)),
+            Spell(id: "spell_mindfulness_enlightenment", name: "Moment of Enlightenment", description: "+100% XP from Mindfulness tasks for 5 minutes.", requiredLevel: 20, runeCost: 6, effect: .xpBoost(.mindfulness, 1.0)),
+
+            // Economy/Meta Spells (Tier 2)
+            Spell(id: "spell_river_of_gold", name: "River of Gold", description: "For 10 minutes, all gold gains are increased by 50%.", requiredLevel: 18, runeCost: 6, effect: .goldBoost(0.50)),
+            Spell(id: "spell_rune_torrent", name: "Rune Torrent", description: "For 10 minutes, rune drops are increased by 20%.", requiredLevel: 22, runeCost: 7, effect: .runeBoost(0.20)),
+            Spell(id: "spell_titans_will", name: "Titan's Will", description: "For 5 minutes, passively generate 2 willpower every 10 seconds.", requiredLevel: 16, runeCost: 5, effect: .willpowerGeneration(2)),
+            Spell(id: "spell_wild_bloom", name: "Wild Bloom", description: "For 15 minutes, plant growth speed is increased by 100%.", requiredLevel: 14, runeCost: 5, effect: .plantGrowthSpeed(1.00)),
+            Spell(id: "spell_guild_war_drums", name: "War Drums", description: "For 10 minutes, all Guild XP gains are increased by 50%.", requiredLevel: 22, runeCost: 7, effect: .guildXpBoost(0.50)),
+            Spell(id: "spell_echo_maelstrom", name: "Echo Maelstrom", description: "+100% Echoes for 10 minutes.", requiredLevel: 25, runeCost: 8, effect: .echoBoost(1.0))
         ]
     }
 
@@ -216,6 +242,7 @@ private extension ItemDatabase {
 
     static func createAllQuestTemplates() -> [QuestTemplate] {
         return [
+            // Onboarding / Early-game
             QuestTemplate(
                 id: UUID(),
                 title: "The First Step",
@@ -250,6 +277,123 @@ private extension ItemDatabase {
                 questDescription: "Show your versatility by completing one task from Strength, Mind, and Joy.",
                 type: .exploration(categories: [.strength, .mind, .joy]),
                 rewards: [.experienceBurst(skill: .vitality, amount: 300), .item(id: "item_ancient_key", quantity: 1)]
+            ),
+
+            // Category-focused goals
+            QuestTemplate(
+                id: UUID(),
+                title: "Mind Over Matter",
+                questDescription: "Complete 5 Mind tasks to sharpen your focus.",
+                type: .milestone(category: .mind, count: 5),
+                rewards: [.currency(150), .experienceBurst(skill: .mind, amount: 150)]
+            ),
+            QuestTemplate(
+                id: UUID(),
+                title: "Heart of Joy",
+                questDescription: "Complete 5 Joy tasks to uplift your spirit.",
+                type: .milestone(category: .joy, count: 5),
+                rewards: [.currency(150), .experienceBurst(skill: .joy, amount: 150)]
+            ),
+            QuestTemplate(
+                id: UUID(),
+                title: "Forge of Strength",
+                questDescription: "Complete 7 Strength tasks to temper your will.",
+                type: .milestone(category: .strength, count: 7),
+                rewards: [.currency(250), .item(id: "equip_rusty_axe", quantity: 1)]
+            ),
+            QuestTemplate(
+                id: UUID(),
+                title: "Vital Steps",
+                questDescription: "Complete 5 Vitality tasks to energize your body.",
+                type: .milestone(category: .vitality, count: 5),
+                rewards: [.currency(200), .experienceBurst(skill: .vitality, amount: 200)]
+            ),
+
+            // Streaks
+            QuestTemplate(
+                id: UUID(),
+                title: "Steady Scholar",
+                questDescription: "Do one Mind task for 5 days in a row.",
+                type: .streak(category: .mind, days: 5),
+                rewards: [.runes(2), .item(id: "seed_clarity", quantity: 1)]
+            ),
+            QuestTemplate(
+                id: UUID(),
+                title: "Joyful Rhythm",
+                questDescription: "Do one Joy task for 4 days in a row.",
+                type: .streak(category: .joy, days: 4),
+                rewards: [.currency(250)]
+            ),
+
+            // Explorations
+            QuestTemplate(
+                id: UUID(),
+                title: "Balance in Motion",
+                questDescription: "Complete one task from Mind, Vitality, and Awareness.",
+                type: .exploration(categories: [.mind, .vitality, .awareness]),
+                rewards: [.experienceBurst(skill: .flow, amount: 250)]
+            ),
+            QuestTemplate(
+                id: UUID(),
+                title: "The Full Spectrum",
+                questDescription: "Complete one task from each of Strength, Mind, Joy, and Vitality.",
+                type: .exploration(categories: [.strength, .mind, .joy, .vitality]),
+                rewards: [.currency(400), .runes(2)]
+            ),
+
+            // Mid-game milestones
+            QuestTemplate(
+                id: UUID(),
+                title: "Craft of Order",
+                questDescription: "Complete 8 tasks in the Other category to bring order to chaos.",
+                type: .milestone(category: .other, count: 8),
+                rewards: [.item(id: "item_scroll_fortune", quantity: 1)]
+            ),
+            QuestTemplate(
+                id: UUID(),
+                title: "Awakened Awareness",
+                questDescription: "Complete 6 Awareness tasks and reflect.",
+                type: .milestone(category: .awareness, count: 6),
+                rewards: [.experienceBurst(skill: .awareness, amount: 300)]
+            ),
+            QuestTemplate(
+                id: UUID(),
+                title: "Flow State",
+                questDescription: "Complete 6 Flow tasks and ride the wave.",
+                type: .milestone(category: .flow, count: 6),
+                rewards: [.currency(300), .experienceBurst(skill: .flow, amount: 300)]
+            ),
+
+            // Late-game challenges
+            QuestTemplate(
+                id: UUID(),
+                title: "Master of Mind",
+                questDescription: "Complete 10 Mind tasks.",
+                type: .milestone(category: .mind, count: 10),
+                rewards: [.runes(3), .currency(600)]
+            ),
+            QuestTemplate(
+                id: UUID(),
+                title: "Unbreakable Discipline",
+                questDescription: "Complete 10 Strength tasks.",
+                type: .milestone(category: .strength, count: 10),
+                rewards: [.currency(700), .item(id: "equip_iron_helmet", quantity: 1)]
+            ),
+            QuestTemplate(
+                id: UUID(),
+                title: "Evergreen Joy",
+                questDescription: "Do one Joy task for 7 days in a row.",
+                type: .streak(category: .joy, days: 7),
+                rewards: [.runes(4)]
+            ),
+
+            // Variety / fun
+            QuestTemplate(
+                id: UUID(),
+                title: "Garden Keeper",
+                questDescription: "Complete any 3 tasks related to plants, food, or movement (Joy/Vitality/Flow).",
+                type: .exploration(categories: [.joy, .vitality, .flow]),
+                rewards: [.item(id: "seed_prosperity", quantity: 1), .currency(250)]
             )
         ]
     }
@@ -312,7 +456,12 @@ private extension ItemDatabase {
             Item(id: "material_dream_shard", name: "Dream Shard", description: "A fragment of a forgotten dream, humming with potential.", itemType: .material, rarity: .rare, icon: "moon.stars.fill", plantableType: nil, consumableEffect: nil, growTime: nil, harvestReward: nil, slot: nil, bonuses: nil),
             Item(id: "material_sunwheat_grain", name: "Sun-Kissed Grain", description: "A warm, golden grain of wheat.", itemType: .material, rarity: .common, icon: "leaf.fill", plantableType: nil, consumableEffect: nil, growTime: nil, harvestReward: nil, slot: nil, bonuses: nil),
             Item(id: "material_glowcap_spore", name: "Glowcap Spore", description: "A faintly glowing mushroom spore.", itemType: .material, rarity: .rare, icon: "circle.grid.3x3.fill", plantableType: nil, consumableEffect: nil, growTime: nil, harvestReward: nil, slot: nil, bonuses: nil),
-            Item(id: "material_ironwood_bark", name: "Ironwood Bark", description: "Remarkably tough bark from the legendary Ironwood tree.", itemType: .material, rarity: .epic, icon: "tree.fill", plantableType: nil, consumableEffect: nil, growTime: nil, harvestReward: nil, slot: nil, bonuses: nil)
+            Item(id: "material_ironwood_bark", name: "Ironwood Bark", description: "Remarkably tough bark from the legendary Ironwood tree.", itemType: .material, rarity: .epic, icon: "tree.fill", plantableType: nil, consumableEffect: nil, growTime: nil, harvestReward: nil, slot: nil, bonuses: nil),
+
+            // --- New Crafting Chain Materials ---
+            Item(id: "material_tanned_leather", name: "Tanned Leather", description: "Leather processed by skilled hands, ready for crafting.", itemType: .material, rarity: .common, icon: "scissors", plantableType: nil, consumableEffect: nil, growTime: nil, harvestReward: nil, slot: nil, bonuses: nil),
+            Item(id: "material_spun_flax", name: "Spun Flax", description: "Flax fibers spun into thread.", itemType: .material, rarity: .common, icon: "circle", plantableType: nil, consumableEffect: nil, growTime: nil, harvestReward: nil, slot: nil, bonuses: nil),
+            Item(id: "material_linen", name: "Linen", description: "Fine linen woven from spun flax.", itemType: .material, rarity: .common, icon: "square", plantableType: nil, consumableEffect: nil, growTime: nil, harvestReward: nil, slot: nil, bonuses: nil)
         ]
     }
 

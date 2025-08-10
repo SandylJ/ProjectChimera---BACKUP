@@ -185,13 +185,19 @@ final class GuildManager: ObservableObject {
     }
     
     func completeBounty(bounty: GuildBounty, for user: User) {
-        user.gold += bounty.guildXpReward
-        user.guildBounties?.removeAll { $0.id == bounty.id }
-        
-        // Add guild XP
+        // Award guild XP and seals
         addGuildXP(bounty.guildXpReward, for: user)
+        user.guildSeals += bounty.guildSealReward
+        
+        // Optional: small gold bonus equal to 10% of XP
+        user.gold += max(0, bounty.guildXpReward / 10)
+        
+        // Mark inactive and remove from list
+        bounty.isActive = false
+        user.guildBounties?.removeAll { $0.id == bounty.id }
     }
     
+    // MARK: - Passive Hunts Processing (toned-down loot + guild XP + enemy modifiers)
     func processHunts(for user: User, deltaTime: TimeInterval, context: ModelContext) {
         guard let activeHunts = user.activeHunts, !activeHunts.isEmpty else { return }
         
@@ -199,36 +205,107 @@ final class GuildManager: ObservableObject {
             let killsPerSecond = calculateHuntKillsPerSecond(hunt: hunt, user: user)
             let newKills = Int(killsPerSecond * deltaTime)
             
+            guard newKills > 0 else { continue }
+            
             hunt.killsAccumulated += newKills
             hunt.lastUpdated = .now
             
-            // Add gold to unclaimed pool
-            if let enemy = hunt.enemy {
-                user.unclaimedHuntGold += newKills * enemy.goldPerKill
-            } else {
-                // Default gold per kill if enemy data not available
-                user.unclaimedHuntGold += newKills * 5
-            }
+            // Track per-enemy kill tally
+            var tally = user.huntKillTally
+            tally[hunt.enemyID, default: 0] += newKills
+            user.huntKillTally = tally
             
-            // Generate item rewards based on kills
+            // Add gold to unclaimed pool (reduced by >50%)
+            let perKillGold = adjustedGoldPerKill(for: hunt.enemyID)
+            user.unclaimedHuntGold += newKills * perKillGold
+            
+            // Generate item rewards (reduced rates and quantities)
             generateHuntItemRewards(kills: newKills, enemyID: hunt.enemyID, for: user)
+            
+            // Add slow Guild XP progression
+            let xpGain = (newKills / 25) + Int(Double(newKills) * xpPerKill(for: hunt.enemyID))
+            if xpGain > 0 { addGuildXP(xpGain, for: user) }
         }
     }
     
-    private func calculateHuntKillsPerSecond(hunt: ActiveHunt, user: User) -> Double {
-        let totalDPS = hunt.memberIDs.compactMap { memberID in
+    // Exposed so UI can reflect the real-time KPS used by the engine
+    func calculateHuntKillsPerSecond(hunt: ActiveHunt, user: User) -> Double {
+        let members: [GuildMember] = hunt.memberIDs.compactMap { memberID in
             user.guildMembers?.first { $0.id == memberID }
-        }.reduce(0.0) { total, member in
-            total + member.combatDPS()
+        }
+        guard !members.isEmpty else { return 0.0 }
+        
+        let roleMultipliers = getEnemyRoleMultipliers(hunt.enemyID)
+        
+        // Cleric provides team-wide DPS multiplier (10% per level)
+        let clericLevelSum = members.filter { $0.role == .cleric }.reduce(0) { $0 + $1.level }
+        let clericBuff = 1.0 + 0.10 * Double(clericLevelSum)
+        
+        let baseTeamDPS = members.reduce(0.0) { total, member in
+            let memberBase = member.combatDPS()
+            let mult = roleMultipliers[member.role] ?? 1.0
+            return total + memberBase * mult
         }
         
+        let effectiveDPS = baseTeamDPS * clericBuff
+        
         // Convert DPS to kills per second (simplified)
-        return totalDPS / 10.0 // Assuming 10 DPS = 1 kill per second
+        return effectiveDPS / 10.0
+    }
+    
+    // Role multipliers per enemy to model strengths/weaknesses
+    func getEnemyRoleMultipliers(_ enemyID: String) -> [GuildMember.Role: Double] {
+        switch enemyID {
+        case "enemy_spider":
+            // Agile foes vulnerable to poisons and precise strikes
+            return [.rogue: 1.3, .wizard: 1.1, .archer: 1.0, .knight: 0.85, .cleric: 1.0]
+        case "enemy_wolf":
+            // Pack beasts; archers are effective at range
+            return [.archer: 1.2, .knight: 1.0, .rogue: 1.0, .wizard: 0.9, .cleric: 1.0]
+        case "enemy_goblin":
+            // Squishy tricksters; disciplined fronts and ranged focus help
+            return [.knight: 1.25, .archer: 1.15, .rogue: 1.0, .wizard: 1.0, .cleric: 1.0]
+        case "enemy_skeleton":
+            // Bones are weak to blunt force; arrows less effective
+            return [.knight: 1.3, .wizard: 1.15, .archer: 0.75, .rogue: 0.9, .cleric: 1.0]
+        case "enemy_zombie":
+            // Undead resist blades, weak to magic
+            return [.wizard: 1.6, .knight: 1.0, .archer: 0.9, .rogue: 0.5, .cleric: 1.05]
+        case "enemy_ghost":
+            // Ethereal; holy and arcane excel, physical falters
+            return [.cleric: 1.8, .wizard: 1.4, .knight: 0.7, .archer: 0.7, .rogue: 0.6]
+        case "enemy_dragon":
+            // Ancient might; favors disciplined ranged and arcane
+            return [.wizard: 1.3, .archer: 1.2, .knight: 1.0, .rogue: 0.8, .cleric: 1.0]
+        default:
+            return [:]
+        }
+    }
+    
+    // Gold per kill after global passive reduction (>50% reduction)
+    func adjustedGoldPerKill(for enemyID: String) -> Int {
+        let base = GameData.shared.getEnemy(id: enemyID)?.goldPerKill ?? 5
+        let adjusted = Int(round(Double(base) * 0.4))
+        return max(1, adjusted)
+    }
+    
+    // Slow guild XP per kill varies slightly by enemy difficulty
+    private func xpPerKill(for enemyID: String) -> Double {
+        switch enemyID {
+        case "enemy_spider": return 0.03
+        case "enemy_wolf": return 0.035
+        case "enemy_goblin": return 0.04
+        case "enemy_skeleton": return 0.05
+        case "enemy_zombie": return 0.06
+        case "enemy_ghost": return 0.08
+        case "enemy_dragon": return 0.2
+        default: return 0.04
+        }
     }
     
     private func generateHuntItemRewards(kills: Int, enemyID: String, for user: User) {
-        // Base chance for items (higher for more kills)
-        let baseChance = min(Double(kills) * 0.1, 0.8) // Max 80% chance
+        // Base chance for items (toned down): lower slope and cap
+        let baseChance = min(Double(kills) * 0.04, 0.35)
         
         // Different item pools for different enemies
         let itemPool = getItemPoolForEnemy(enemyID)
@@ -236,7 +313,9 @@ final class GuildManager: ObservableObject {
         for item in itemPool {
             let chance = baseChance * item.dropRate
             if Double.random(in: 0...1) < chance {
-                let quantity = Int.random(in: item.minQuantity...item.maxQuantity)
+                let rawQuantity = Int.random(in: item.minQuantity...item.maxQuantity)
+                // Reduce quantity by ~50%, at least 1
+                let quantity = max(1, Int(Double(rawQuantity) * 0.5))
                 addUnclaimedHuntItem(itemID: item.itemID, quantity: quantity, for: user)
             }
         }
@@ -435,5 +514,65 @@ final class GuildManager: ObservableObject {
         // fallback: any plantable
         if let anySeed = ItemDatabase.shared.getAllPlantables().first?.id { return anySeed }
         return nil
+    }
+
+    // MARK: - Passive Crafting Production (NEW)
+    func processCrafting(for user: User, deltaTime: TimeInterval) {
+        guard deltaTime > 0 else { return }
+
+        // Production configuration per role
+        let productionMap: [(role: GuildMember.Role, itemID: String, baseSecondsPerItem: Double)] = [
+            (.leatherworker, "material_tanned_leather", 300), // 5 min per base worker
+            (.spinner, "material_spun_flax", 180),            // 3 min per base worker
+            (.weaver, "material_linen", 420)                  // 7 min per base worker
+        ]
+
+        var progress = user.craftingProgress
+
+        for entry in productionMap {
+            let workers = (user.guildMembers ?? []).filter { $0.role == entry.role }
+            guard !workers.isEmpty else { continue }
+
+            // Sum item/s across workers using level scaling: faster by 10% per level beyond 1
+            let itemsPerSecond: Double = workers.reduce(0.0) { partial, member in
+                let speedMultiplier = 1.0 + 0.1 * Double(max(0, member.level - 1))
+                let secondsPerItem = max(10.0, entry.baseSecondsPerItem / speedMultiplier)
+                return partial + (1.0 / secondsPerItem)
+            }
+
+            let key = entry.role.rawValue.lowercased()
+            let newValue = (progress[key] ?? 0.0) + itemsPerSecond * deltaTime
+            progress[key] = newValue
+
+            // Convert whole numbers into produced items
+            let wholeItems = Int(newValue)
+            if wholeItems > 0 {
+                addUnclaimedCraftedItem(itemID: entry.itemID, quantity: wholeItems, for: user)
+                progress[key] = newValue - Double(wholeItems)
+            }
+        }
+
+        user.craftingProgress = progress
+    }
+
+    private func addUnclaimedCraftedItem(itemID: String, quantity: Int, for user: User) {
+        if let existing = user.unclaimedCraftedItems.first(where: { $0.itemID == itemID }) {
+            existing.quantity += quantity
+        } else {
+            let newItem = UnclaimedCraftedItem(itemID: itemID, quantity: quantity, owner: user)
+            user.unclaimedCraftedItems.append(newItem)
+        }
+    }
+
+    func claimCraftedItems(for user: User) {
+        guard !user.unclaimedCraftedItems.isEmpty else { return }
+        for item in user.unclaimedCraftedItems {
+            if let inv = user.inventory?.first(where: { $0.itemID == item.itemID }) {
+                inv.quantity += item.quantity
+            } else {
+                user.inventory?.append(InventoryItem(itemID: item.itemID, quantity: item.quantity, owner: user))
+            }
+        }
+        user.unclaimedCraftedItems.removeAll()
     }
 }

@@ -89,6 +89,8 @@ final class SpellbookManager {
             applyBuff(user: user, effect: .guildXpBoost(multiplier), duration: duration)
         case .plantGrowthSpeed(let multiplier):
             applyBuff(user: user, effect: .plantGrowthSpeed(multiplier), duration: duration)
+        case .echoBoost(let multiplier):
+            applyBuff(user: user, effect: .echoBoost(multiplier), duration: duration)
         }
     }
 
@@ -121,6 +123,7 @@ extension SpellEffect {
         case .reducedUpgradeCost(let percentage): return "-\(Int(percentage * 100))% Upgrade Cost"
         case .guildXpBoost(let multiplier): return "+\(Int(multiplier * 100))% Guild XP"
         case .plantGrowthSpeed(let multiplier): return "+\(Int(multiplier * 100))% Plant Growth"
+        case .echoBoost(let multiplier): return "+\(Int(multiplier * 100))% Echoes"
         }
     }
     var systemImage: String {
@@ -134,6 +137,7 @@ extension SpellEffect {
         case .reducedUpgradeCost: return "arrow.down.circle.fill"
         case .guildXpBoost: return "person.3.fill"
         case .plantGrowthSpeed: return "leaf.fill"
+        case .echoBoost: return "speaker.wave.2.circle.fill"
         }
     }
 }
@@ -290,15 +294,18 @@ final class GameLogicManager {
     private func checkForLevelUp(user: User) -> Bool {
         let xpForNextLevel = xpRequired(for: user.level + 1)
         if user.totalXP >= xpForNextLevel {
-            user.level += 1; user.gold += 100; 
-        // Apply rune boost from spells
-        var runesGained = 1
-        for (effect, _) in user.activeBuffs {
-            if case .runeBoost(let multiplier) = effect {
-                runesGained = Int(Double(runesGained) * (1.0 + multiplier))
+            user.level += 1
+            // Unlock any new spells available at this level
+            SpellbookManager.shared.unlockNewSpells(for: user)
+            user.gold += 100
+            // Apply rune boost from spells
+            var runesGained = 1
+            for (effect, _) in user.activeBuffs {
+                if case .runeBoost(let multiplier) = effect {
+                    runesGained = Int(Double(runesGained) * (1.0 + multiplier))
+                }
             }
-        }
-        user.runes += runesGained
+            user.runes += runesGained
             _ = checkForLevelUp(user: user)
             return true
         }
